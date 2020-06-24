@@ -1,32 +1,73 @@
 #
 # Makefile for some libs needed in the kernel.
 #
+# Note! Dependencies are done automagically by 'make dep', which also
+# removes any old dependencies. DON'T put your own dependencies here
+# unless it's something special (ie not a .c file).
+#
 
+AR	=gar
+AS	=gas
+LD	=gld
+LDFLAGS	=-s -x
+CC	=gcc
+CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer -fcombine-regs \
+	-finline-functions -mstring-insns -nostdinc -I../include
+CPP	=gcc -E -nostdinc -I../include
 
-lib-y := errno.o ctype.o string.o vsprintf.o cmdline.o \
-	 bust_spinlocks.o rbtree.o radix-tree.o dump_stack.o \
-	 kobject.o idr.o div64.o parser.o int_sqrt.o \
-	 bitmap.o extable.o
+.c.s:
+	$(CC) $(CFLAGS) \
+	-S -o $*.s $<
+.s.o:
+	$(AS) -c -o $*.o $<
+.c.o:
+	$(CC) $(CFLAGS) \
+	-c -o $*.o $<
 
-lib-$(CONFIG_RWSEM_GENERIC_SPINLOCK) += rwsem-spinlock.o
-lib-$(CONFIG_RWSEM_XCHGADD_ALGORITHM) += rwsem.o
+OBJS  = ctype.o _exit.o open.o close.o errno.o write.o dup.o setsid.o \
+	execve.o wait.o string.o malloc.o
 
-ifneq ($(CONFIG_HAVE_DEC_LOCK),y) 
-  lib-y += dec_and_lock.o
-endif
+lib.a: $(OBJS)
+	$(AR) rcs lib.a $(OBJS)
+	sync
 
-obj-$(CONFIG_CRC32)	+= crc32.o
+clean:
+	rm -f core *.o *.a tmp_make
+	for i in *.c;do rm -f `basename $$i .c`.s;done
 
-obj-$(CONFIG_ZLIB_INFLATE) += zlib_inflate/
-obj-$(CONFIG_ZLIB_DEFLATE) += zlib_deflate/
+dep:
+	sed '/\#\#\# Dependencies/q' < Makefile > tmp_make
+	(for i in *.c;do echo -n `echo $$i | sed 's,\.c,\.s,'`" "; \
+		$(CPP) -M $$i;done) >> tmp_make
+	cp tmp_make Makefile
 
-host-progs	:= gen_crc32table
-clean-files	:= crc32table.h
-
-$(obj)/crc32.o: $(obj)/crc32table.h
-
-quiet_cmd_crc32 = GEN     $@
-      cmd_crc32 = $< > $@
-
-$(obj)/crc32table.h: $(obj)/gen_crc32table
-	$(call cmd,crc32)
+### Dependencies:
+_exit.s _exit.o : _exit.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h 
+close.s close.o : close.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h 
+ctype.s ctype.o : ctype.c ../include/ctype.h 
+dup.s dup.o : dup.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h 
+errno.s errno.o : errno.c 
+execve.s execve.o : execve.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h 
+malloc.s malloc.o : malloc.c ../include/linux/kernel.h ../include/linux/mm.h \
+  ../include/asm/system.h 
+open.s open.o : open.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h ../include/stdarg.h 
+setsid.s setsid.o : setsid.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h 
+string.s string.o : string.c ../include/string.h 
+wait.s wait.o : wait.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h ../include/sys/wait.h 
+write.s write.o : write.c ../include/unistd.h ../include/sys/stat.h \
+  ../include/sys/types.h ../include/sys/times.h ../include/sys/utsname.h \
+  ../include/utime.h 
